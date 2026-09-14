@@ -1,3 +1,6 @@
+import json
+from typing import Any
+
 from openai import OpenAI
 
 from app.models.chat import ChatMessage
@@ -20,25 +23,51 @@ class KiloProvider(LLMProvider):
 
     def generate(
         self,
-        messages: list[ChatMessage],
-        temperature,
-        max_tokens,
-    ) -> str:
+        messages: list[dict[str, Any]],
+        temperature: float,
+        max_tokens: int,
+        tools: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
 
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": message.role,
-                    "content": message.content,
-                }
-                for message in messages
-            ],
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
 
-        return response.choices[0].message.content or ""
+        response = self.client.chat.completions.create(**payload)
+        message = response.choices[0].message
+        
+        if message.tool_calls:
+            tool_calls = []
+
+            for tool_call in message.tool_calls:
+                tool_calls.append(
+                    {
+                        "id": tool_call.id,
+                        "type": "function",
+                        "function": {
+                            "name": tool_call.function.name,
+                            "arguments": tool_call.function.arguments,
+                        },
+                    }
+                )
+
+            return {
+                "type": "tool_call",
+                "tool_calls": tool_calls,
+            }
+
+        # LLM trả câu trả lời cuối cùng
+        return {
+            "type": "final",
+            "content": message.content or "",
+        }
+        
     
     async def stream(
     self,

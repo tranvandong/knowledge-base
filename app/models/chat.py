@@ -1,11 +1,19 @@
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
 
 class ChatMessage(BaseModel):
-    role: Literal["system", "user", "assistant"]
-    content: str
+    role: Literal[
+        "system",
+        "user",
+        "assistant",
+        "tool",
+    ]
+
+    content: str | None = None
+    tool_calls: list[dict[str, Any]] | None = None
+    tool_call_id: str | None = None
 
 
 class ChatRequest(BaseModel):
@@ -18,7 +26,7 @@ class ChatRequest(BaseModel):
     )
 
     max_tokens: int = Field(
-        default=1000,
+        default=2000,
         gt=0,
     )
 
