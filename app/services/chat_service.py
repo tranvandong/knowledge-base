@@ -1,10 +1,13 @@
 import json
+import logging
 from typing import Any
 
 from app.models.chat import ChatRequest, ChatResponse
 from app.providers.llm import LLMProvider
-from app.tools.errors import ToolError
 from app.tools.executor import ToolExecutor
+
+
+logger = logging.getLogger(__name__)
 
 
 class ChatService:
@@ -55,11 +58,11 @@ class ChatService:
             )
 
             for tool_call in tool_calls:
-                tool_name = tool_call["function"]["name"]
                 tool_call_id = tool_call["id"]
+                tool_name = tool_call["function"]["name"]
                 raw_arguments = tool_call["function"]["arguments"]
 
-                tool_message = self._execute_tool_safely(
+                tool_message = self._execute_tool(
                     tool_name=tool_name,
                     tool_call_id=tool_call_id,
                     raw_arguments=raw_arguments,
@@ -73,7 +76,7 @@ class ChatService:
             "Maximum tool calling rounds exceeded"
         )
 
-    def _execute_tool_safely(
+    def _execute_tool(
         self,
         tool_name: str,
         tool_call_id: str,
@@ -87,46 +90,48 @@ class ChatService:
                     "Tool arguments must be a JSON object"
                 )
 
-            result, trace = self.tool_executor.execute(
-                name=tool_name,
-                arguments=arguments,
-            )
-            print("TOOL TRACE:", trace.model_dump_json())
-
-            return {
-                "role": "tool",
-                "tool_call_id": tool_call_id,
-                "content": json.dumps(
-                    {
-                        "success": True,
-                        "result": result,
-                    },
-                    ensure_ascii=False,
-                ),
-            }
-
-        except ToolError as exc:
+        except json.JSONDecodeError:
             return {
                 "role": "tool",
                 "tool_call_id": tool_call_id,
                 "content": json.dumps(
                     {
                         "success": False,
-                        "error": str(exc),
+                        "error": "Invalid JSON tool arguments",
                     },
                     ensure_ascii=False,
                 ),
             }
 
-        except Exception:
-            return   {
-                "role": "tool",
-                "tool_call_id": tool_call_id,
-                "content": json.dumps(
-                    {
-                        "success": False,
-                        "error": trace.error,
-                    },
-                    ensure_ascii=False,
-                ),
+        result, trace = self.tool_executor.execute(
+            name=tool_name,
+            arguments=arguments,
+            tool_call_id=tool_call_id,
+        )
+
+        logger.info(
+            "Tool trace | %s",
+            trace.model_dump_json(),
+        )
+
+        if trace.success:
+            content = {
+                "success": True,
+                "result": result,
+                "trace_id": str(trace.trace_id),
             }
+        else:
+            content = {
+                "success": False,
+                "error": trace.error,
+                "trace_id": str(trace.trace_id),
+            }
+
+        return {
+            "role": "tool",
+            "tool_call_id": tool_call_id,
+            "content": json.dumps(
+                content,
+                ensure_ascii=False,
+            ),
+        }

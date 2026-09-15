@@ -3,6 +3,11 @@ from fastapi import FastAPI
 from app.ai.chat import router as chat_router
 from app.ai.embedding import router as embedding_router
 from app.ai.health import router as health_router
+from app.logging_config import setup_logging
+
+
+setup_logging()
+
 
 app = FastAPI(
     title="AI Service",
