@@ -2,71 +2,52 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.documents.repository import DocumentRepository
 from app.tools.base import BaseTool
 
 
 class SearchDocumentsInput(BaseModel):
-    query: str = Field(min_length=1)
-    limit: int = Field(default=5, ge=1, le=20)
+    query: str = Field(
+        min_length=1,
+        description="Natural language query used to search documents",
+    )
+    limit: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Maximum number of documents to return",
+    )
 
 
-class SearchDocumentsTool(BaseTool):
-    name = "search_documents"
+class SearchDocumentsTool(BaseTool[SearchDocumentsInput]):
+    def __init__(self, repository: DocumentRepository):
+        self.repository = repository
 
-    def definition(self) -> dict[str, Any]:
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": (
-                    "Search documents in the knowledge base "
-                    "using a natural language query."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The document search query",
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "minimum": 1,
-                            "maximum": 20,
-                            "default": 5,
-                        },
-                    },
-                    "required": ["query"],
-                    "additionalProperties": False,
-                },
-            },
-        }
-        
+    @property
+    def name(self) -> str:
+        return "search_documents"
+
+    @property
+    def description(self) -> str:
+        return "Search documents in the knowledge base."
+
+    @property
+    def input_model(self) -> type[SearchDocumentsInput]:
+        return SearchDocumentsInput
 
     def execute(
         self,
-        arguments: dict[str, Any],
+        arguments: SearchDocumentsInput,
     ) -> dict[str, Any]:
-        data = SearchDocumentsInput.model_validate(arguments)
-
-        # Mock data.
-        # Sau này thay bằng PostgreSQL + pgvector.
-        documents = [
-            {
-                "document_id": "doc_001",
-                "title": "HR Policy",
-                "content": "Nhân viên được nghỉ 12 ngày phép năm.",
-                "page": 12,
-            },
-            {
-                "document_id": "doc_002",
-                "title": "Company Handbook",
-                "content": "Nhân viên cần gửi đơn nghỉ phép cho quản lý.",
-                "page": 8,
-            },
-        ]
+        documents = self.repository.search(
+            query=arguments.query,
+            limit=arguments.limit,
+        )
 
         return {
-            "query": data.query,
-            "results": documents[: data.limit],
+            "query": arguments.query,
+            "results": [
+                document.model_dump()
+                for document in documents
+            ],
         }

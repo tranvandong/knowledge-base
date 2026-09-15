@@ -3,18 +3,18 @@ from typing import Any
 
 from app.models.chat import ChatRequest, ChatResponse
 from app.providers.llm import LLMProvider
-from app.tools.registry import ToolRegistry
+from app.tools.errors import ToolError
+from app.tools.executor import ToolExecutor
 
 
 class ChatService:
-
     def __init__(
         self,
         llm_provider: LLMProvider,
-        tool_registry: ToolRegistry,
+        tool_executor: ToolExecutor,
     ):
         self.llm_provider = llm_provider
-        self.tool_registry = tool_registry
+        self.tool_executor = tool_executor
 
     def chat(self, request: ChatRequest) -> ChatResponse:
         messages: list[dict[str, Any]] = [
@@ -30,7 +30,7 @@ class ChatService:
                 messages=messages,
                 temperature=request.temperature,
                 max_tokens=request.max_tokens,
-                tools=self.tool_registry.definitions(),
+                tools=self.tool_executor.definitions(),
             )
 
             if response["type"] == "final":
@@ -41,12 +41,11 @@ class ChatService:
 
             if response["type"] != "tool_call":
                 raise ValueError(
-                    f"Unsupported LLM response type: {response['type']}"
+                    f"Unsupported response type: {response['type']}"
                 )
 
             tool_calls = response["tool_calls"]
 
-            # Giữ nguyên assistant message theo OpenAI-compatible format
             messages.append(
                 {
                     "role": "assistant",
@@ -57,54 +56,77 @@ class ChatService:
 
             for tool_call in tool_calls:
                 tool_name = tool_call["function"]["name"]
+                tool_call_id = tool_call["id"]
                 raw_arguments = tool_call["function"]["arguments"]
 
-                try:
-                    tool_arguments = json.loads(raw_arguments)
-                except json.JSONDecodeError as exc:
-                    raise ValueError(
-                        f"Invalid tool arguments for {tool_name}: "
-                        f"{raw_arguments}"
-                    ) from exc
-
-                tool_result = self.tool_registry.execute(
-                    name=tool_name,
-                    arguments=tool_arguments,
+                tool_message = self._execute_tool_safely(
+                    tool_name=tool_name,
+                    tool_call_id=tool_call_id,
+                    raw_arguments=raw_arguments,
                 )
 
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_call["id"],
-                        "content": json.dumps(
-                            tool_result,
-                            ensure_ascii=False,
-                        ),
-                    }
-                )
+                messages.append(tool_message)
 
             tool_round += 1
 
-        raise RuntimeError("Maximum tool calling rounds exceeded")
+        raise RuntimeError(
+            "Maximum tool calling rounds exceeded"
+        )
 
-    def _to_chat_message(
+    def _execute_tool_safely(
         self,
-        message: dict[str, Any],
-    ):
-        """
-        Chuyển dict nội bộ về ChatMessage.
-        Tool message cần được truyền đúng role/content.
-        """
-        from app.models.chat import ChatMessage
+        tool_name: str,
+        tool_call_id: str,
+        raw_arguments: str,
+    ) -> dict[str, Any]:
+        try:
+            arguments = json.loads(raw_arguments)
 
-        return ChatMessage.model_validate(message)
-    
-    
-    async def stream(self, request):
+            if not isinstance(arguments, dict):
+                raise ValueError(
+                    "Tool arguments must be a JSON object"
+                )
 
-        async for chunk in self.llm_provider.stream(
-            messages=request.messages,
-            temperature=request.temperature,
-            max_tokens=request.max_tokens,
-        ):
-            yield chunk
+            result, trace = self.tool_executor.execute(
+                name=tool_name,
+                arguments=arguments,
+            )
+            print("TOOL TRACE:", trace.model_dump_json())
+
+            return {
+                "role": "tool",
+                "tool_call_id": tool_call_id,
+                "content": json.dumps(
+                    {
+                        "success": True,
+                        "result": result,
+                    },
+                    ensure_ascii=False,
+                ),
+            }
+
+        except ToolError as exc:
+            return {
+                "role": "tool",
+                "tool_call_id": tool_call_id,
+                "content": json.dumps(
+                    {
+                        "success": False,
+                        "error": str(exc),
+                    },
+                    ensure_ascii=False,
+                ),
+            }
+
+        except Exception:
+            return   {
+                "role": "tool",
+                "tool_call_id": tool_call_id,
+                "content": json.dumps(
+                    {
+                        "success": False,
+                        "error": trace.error,
+                    },
+                    ensure_ascii=False,
+                ),
+            }
