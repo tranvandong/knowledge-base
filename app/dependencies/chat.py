@@ -1,9 +1,7 @@
 from fastapi import Depends
 
 from app.config import settings
-from app.documents.in_memory_repository import (
-    InMemoryDocumentRepository,
-)
+from app.documents.in_memory_repository import InMemoryDocumentRepository
 from app.documents.repository import DocumentRepository
 from app.providers.kilo_llm import KiloProvider
 from app.providers.llm import LLMProvider
@@ -26,23 +24,15 @@ def get_document_repository() -> DocumentRepository:
     return InMemoryDocumentRepository()
 
 
-def get_tool_registry(
-    repository: DocumentRepository = Depends(
-        get_document_repository
-    ),
-) -> ToolRegistry:
+def get_tool_executor(
+    repository: DocumentRepository = Depends(get_document_repository),
+) -> ToolExecutor:
     registry = ToolRegistry()
 
     registry.register(SearchDocumentsTool(repository))
     registry.register(GetDocumentTool(repository))
     registry.register(ListDocumentsTool(repository))
 
-    return registry
-
-
-def get_tool_executor(
-    registry: ToolRegistry = Depends(get_tool_registry),
-) -> ToolExecutor:
     return ToolExecutor(registry)
 
 
