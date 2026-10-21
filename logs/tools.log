@@ -16,3 +16,7 @@
 2026-09-16 09:04:03,520 | INFO | app.tools.executor | Tool succeeded | trace_id=5219e936-250f-4edb-b856-238d83785f4e | tool=get_document | duration_ms=0.4
 2026-09-16 09:04:03,520 | INFO | app.services.chat_service | Tool trace | {"trace_id":"5219e936-250f-4edb-b856-238d83785f4e","tool_call_id":"chatcmpl-tool-a73f01618a45c8a1","tool_name":"get_document","arguments":{"document_id":"doc_002"},"success":true,"result":{"found":true,"document":{"document_id":"doc_002","title":"Company Handbook","content":"Nhân viên cần gửi đơn nghỉ phép cho quản lý.","page":8}},"error":null,"started_at":"2026-09-16T02:04:03.520382Z","duration_ms":0.4}
 2026-09-16 09:04:07,590 | INFO | httpx2 | HTTP Request: POST https://api.kilo.ai/api/gateway/chat/completions "HTTP/1.1 200 OK"
+2026-10-07 16:50:16,256 | INFO | watchfiles.main | 1 change detected
+2026-10-07 16:50:17,036 | INFO | watchfiles.main | 6 changes detected
+2026-10-07 16:50:28,007 | INFO | watchfiles.main | 1 change detected
+2026-10-07 16:50:28,657 | INFO | watchfiles.main | 6 changes detected

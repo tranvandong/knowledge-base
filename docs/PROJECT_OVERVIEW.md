@@ -29,6 +29,17 @@
 - Tool executor với tracing và logging
 - Các tool có sẵn: `search_documents`, `get_document`, `list_documents`
 
+### 5. OCR (Optical Character Recognition)
+- Nhận diện văn bản từ hình ảnh
+- Hỗ trợ 3 nguồn hình ảnh:
+  - **URL**: Hình ảnh từ internet (http/https)
+  - **Base64**: Image bytes dạng Base64 data URL
+  - **File ID**: File đã upload lên Files API
+- Tích hợp với Meta AI API (muse-spark-1.3)
+- Hỗ trợ nhiều ngôn ngữ (Vietnamese, English, Japanese, Korean, Chinese)
+- Streaming response cho kết quả real-time
+- OCR tool cho phép agent nhận diện text từ hình ảnh
+
 ## Công nghệ sử dụng
 
 ### Core
@@ -56,19 +67,23 @@ app/
 ├── ai/                  # API routes
 │   ├── chat.py          # Chat endpoint (streaming)
 │   ├── embedding.py     # Embedding endpoint
+│   ├── ocr.py           # OCR endpoint (image text recognition)
 │   └── health.py        # Health check
 ├── models/              # Pydantic models
 │   ├── chat.py          # Chat request/response
-│   └── embedding.py     # Embedding request/response
+│   ├── embedding.py     # Embedding request/response
+│   └── ocr.py           # OCR request/response
 ├── providers/           # AI providers
 │   ├── llm.py           # Abstract LLM provider
 │   ├── kilo_llm.py      # Kilo.ai implementation
 │   ├── mock_llm.py      # Mock LLM provider
 │   ├── embedding.py     # Abstract embedding provider
-│   └── fake_embedding.py # Mock embedding provider
+│   ├── fake_embedding.py # Mock embedding provider
+│   └── ocr_provider.py  # OCR providers (Meta, Mock, Local)
 ├── services/            # Business logic
 │   ├── chat_service.py  # Chat service với tool calling
-│   └── embedding_service.py # Embedding service
+│   ├── embedding_service.py # Embedding service
+│   └── ocr_service.py   # OCR service
 ├── tools/               # Tool system
 │   ├── base.py          # BaseTool abstract class
 │   ├── registry.py      # ToolRegistry
@@ -77,7 +92,8 @@ app/
 │   ├── errors.py        # Tool exceptions
 │   ├── search_documents.py # Search tool
 │   ├── get_document.py  # Get document tool
-│   └── list_documents.py # List documents tool
+│   ├── list_documents.py # List documents tool
+│   └── ocr_tool.py     # OCR tool
 ├── documents/           # Document management
 │   ├── models.py        # Document model
 │   ├── repository.py    # Abstract repository
@@ -132,6 +148,32 @@ POST /embed
 - Request: `EmbeddingRequest` với text
 - Response: `EmbeddingResponse` với embedding vector
 
+### OCR
+```
+POST /ocr
+```
+- Request: `OCRRequest` với source_type và image data (url/base64/file_id)
+- Response: `OCRResponse` với danh sách text được nhận diện
+
+### OCR Streaming
+```
+POST /ocr/stream
+```
+- Response: Server-Sent Events (SSE) stream
+- Format: `data: {"status": "text_found", "text": "...", "index": 0}\n\n`
+
+### OCR Providers Info
+```
+GET /ocr/providers
+```
+- Response: Thông tin về các OCR providers được hỗ trợ
+
+### OCR Health
+```
+GET /ocr/health
+```
+- Response: `{"status": "ok", "service": "ocr", "provider": "...", "model": "..."}`
+
 ## Sample Documents
 
 Hệ thống có sẵn 3 sample documents:
@@ -158,6 +200,11 @@ Hệ thống có sẵn 3 sample documents:
 - **Input**: limit (int, default 20)
 - **Returns**: Danh sách tài liệu với document_id, title, page
 
+#### 4. ocr_image
+- **Purpose**: Nhận diện văn bản từ hình ảnh
+- **Input**: source_type (url/base64/file_id), url/base64_data/file_id, prompt (optional)
+- **Returns**: Văn bản được nhận diện cùng với ngôn ngữ phát hiện
+
 ## Environment Variables
 
 ```bash
@@ -166,6 +213,11 @@ KILO_API_KEY=your_api_key_here
 
 # Optional (with defaults)
 KILO_MODEL=stepfun/step-3.7-flash:free
+
+# OCR Configuration (optional)
+META_AI_API_KEY=your_meta_api_key_here  # For MetaOCRProvider
+OCR_MODEL=muse-spark-1.3  # Default OCR model
+OCR_PROVIDER=mock  # mock, meta, or local
 ```
 
 ## Logging

@@ -1,0 +1,15 @@
+[project]
+name = "knowledge-base"
+version = "0.1.0"
+description = "Knowledge Base - AI Service"
+authors = [
+    {name = "Nguyễn Trãi", email = "nguyen.trai@gmail.com"},
+]
+dependencies = [
+    "fastapi[standard]",
+    "pydantic",
+    "openai==3.11.0",
+    "pydantic-settings",
+    "pytest",
+]
+requires-python = ">=3.12"
